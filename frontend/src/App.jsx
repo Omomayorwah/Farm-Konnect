@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import storage from './utils/storage';
+import * as api from './services/apiService';
 import Sidebar from './components/Sidebar';
 import MobileHeader from './components/MobileHeader';
 import LandingPage from './pages/LandingPage';
@@ -23,175 +23,223 @@ const FarmKonnectApp = () => {
   const [selectedListing, setSelectedListing] = useState(null);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Load data from storage on mount
+  // Load data from API on mount
   useEffect(() => {
-    loadAllData();
+    loadInitialData();
   }, []);
 
-  const loadAllData = async () => {
+  // Reload data when view changes or after mutations
+  const reloadData = async () => {
+    if (currentUser) {
+      await Promise.all([
+        loadListings(),
+        loadMessages(),
+        currentUser.type === 'admin' && loadUsers(),
+      ]);
+    }
+  };
+
+  const loadInitialData = async () => {
     setIsLoading(true);
+    setError(null);
     try {
-      // Load users
-      const userKeys = await storage.list('user:');
-      const loadedUsers = [];
-      for (const key of userKeys) {
-        const user = await storage.get(key);
-        if (user) loadedUsers.push(user);
-      }
-      
-      // Load listings
-      const listingKeys = await storage.list('listing:');
-      const loadedListings = [];
-      for (const key of listingKeys) {
-        const listing = await storage.get(key);
-        if (listing) loadedListings.push(listing);
-      }
-      
-      // Load messages
-      const messageKeys = await storage.list('message:');
-      const loadedMessages = [];
-      for (const key of messageKeys) {
-        const message = await storage.get(key);
-        if (message) loadedMessages.push(message);
-      }
-      
-      // Load current user
-      const currentUserId = await storage.get('currentUser');
-      if (currentUserId) {
-        const user = loadedUsers.find(u => u.id === currentUserId);
+      // Check if user is already logged in (has token)
+      const token = api.getToken();
+      if (token) {
+        const { user } = await api.getCurrentUser();
         if (user) {
-          setCurrentUser(user);
-          setCurrentView(user.type === 'admin' ? 'admin-dashboard' : 'dashboard');
+          // Normalize user ID
+          const normalizedUser = { ...user, id: user.id || user._id };
+          setCurrentUser(normalizedUser);
+          setCurrentView(normalizedUser.type === 'admin' ? 'admin-dashboard' : 'dashboard');
+          
+          // Load user-specific data
+          await Promise.all([
+            loadListings(normalizedUser),
+            loadMessages(),
+            normalizedUser.type === 'admin' && loadUsers(),
+          ]);
         }
       }
-      
-      setUsers(loadedUsers);
-      setListings(loadedListings);
-      setMessages(loadedMessages);
     } catch (error) {
-      console.error('Error loading data:', error);
+      console.error('Error loading initial data:', error);
+      // If token is invalid, clear it
+      api.logout();
     }
     setIsLoading(false);
   };
 
-  const saveUser = async (user) => {
-    await storage.set(`user:${user.id}`, user);
-    setUsers(prev => {
-      const filtered = prev.filter(u => u.id !== user.id);
-      return [...filtered, user];
-    });
+  const loadListings = async (user = currentUser) => {
+    try {
+      if (user?.type === 'admin') {
+        const { listings: allListings } = await api.getAllListingsAdmin();
+        setListings(allListings.map(l => ({ ...l, id: l._id || l.id })));
+      } else {
+        const { listings: approvedListings } = await api.getAllListings();
+        setListings(approvedListings.map(l => ({ ...l, id: l._id || l.id })));
+      }
+    } catch (error) {
+      console.error('Error loading listings:', error);
+      setError('Failed to load listings');
+    }
   };
 
-  const saveListing = async (listing) => {
-    await storage.set(`listing:${listing.id}`, listing);
-    setListings(prev => {
-      const filtered = prev.filter(l => l.id !== listing.id);
-      return [...filtered, listing];
-    });
+  const loadMessages = async () => {
+    try {
+      const { messages: userMessages } = await api.getAllMessages();
+      setMessages(userMessages.map(m => ({ ...m, id: m._id || m.id })));
+    } catch (error) {
+      console.error('Error loading messages:', error);
+      setError('Failed to load messages');
+    }
   };
 
-  const saveMessage = async (message) => {
-    await storage.set(`message:${message.id}`, message);
-    setMessages(prev => [...prev, message]);
+  const loadUsers = async () => {
+    try {
+      const { users: allUsers } = await api.getUsers();
+      setUsers(allUsers.map(u => ({ ...u, id: u._id || u.id })));
+    } catch (error) {
+      console.error('Error loading users:', error);
+      setError('Failed to load users');
+    }
   };
 
   const handleRegister = async (formData) => {
-    const newUser = {
-      id: `user_${Date.now()}`,
-      email: formData.email,
-      password: formData.password,
-      type: formData.type,
-      status: 'pending',
-      profile: formData.type === 'farmer' ? {
-        fullName: '',
-        phone: '',
-        location: '',
-        experience: '',
-        farmingType: '',
-        bio: '',
-        references: ''
-      } : {
-        fullName: '',
-        phone: '',
-        location: '',
-        bio: ''
-      },
-      createdAt: new Date().toISOString()
-    };
-    
-    await saveUser(newUser);
-    await storage.set('currentUser', newUser.id);
-    setCurrentUser(newUser);
-    setCurrentView('dashboard');
+    setError(null);
+    try {
+      const { user, token } = await api.register({
+        email: formData.email,
+        password: formData.password,
+        type: formData.type,
+      });
+      
+      const normalizedUser = { ...user, id: user.id || user._id };
+      setCurrentUser(normalizedUser);
+      setCurrentView('dashboard');
+      
+      // Load initial data after registration
+      await loadListings(normalizedUser);
+      await loadMessages();
+    } catch (error) {
+      console.error('Registration error:', error);
+      setError(error.message || 'Registration failed. Please try again.');
+      throw error;
+    }
   };
 
   const handleLogin = async (email, password) => {
-    const user = users.find(u => u.email === email && u.password === password);
-    if (user) {
-      await storage.set('currentUser', user.id);
-      setCurrentUser(user);
-      setCurrentView(user.type === 'admin' ? 'admin-dashboard' : 'dashboard');
+    setError(null);
+    try {
+      const { user, token } = await api.login({ email, password });
+      
+      const normalizedUser = { ...user, id: user.id || user._id };
+      setCurrentUser(normalizedUser);
+      setCurrentView(normalizedUser.type === 'admin' ? 'admin-dashboard' : 'dashboard');
+      
+      // Load user-specific data after login
+      await Promise.all([
+        loadListings(),
+        loadMessages(),
+        normalizedUser.type === 'admin' && loadUsers(),
+      ]);
+      
       return true;
+    } catch (error) {
+      console.error('Login error:', error);
+      setError(error.message || 'Invalid email or password');
+      return false;
     }
-    return false;
   };
 
   const handleLogout = async () => {
-    await storage.set('currentUser', null);
+    api.logout();
     setCurrentUser(null);
+    setUsers([]);
+    setListings([]);
+    setMessages([]);
     setCurrentView('landing');
   };
 
   const handleUpdateProfile = async (profileData) => {
-    const updatedUser = { ...currentUser, profile: { ...currentUser.profile, ...profileData } };
-    await saveUser(updatedUser);
-    setCurrentUser(updatedUser);
+    setError(null);
+    try {
+      const { user } = await api.updateProfile(profileData);
+      const normalizedUser = { ...user, id: user.id || user._id };
+      setCurrentUser(normalizedUser);
+    } catch (error) {
+      console.error('Profile update error:', error);
+      setError(error.message || 'Failed to update profile');
+      throw error;
+    }
   };
 
-  const handleCreateListing = async (listingData) => {
-    const newListing = {
-      id: `listing_${Date.now()}`,
-      ownerId: currentUser.id,
-      ownerName: currentUser.profile.fullName,
-      status: 'pending',
-      ...listingData,
-      createdAt: new Date().toISOString()
-    };
-    
-    await saveListing(newListing);
-    setCurrentView('dashboard');
+  const handleCreateListing = async (listingData, photos = []) => {
+    setError(null);
+    try {
+      // Convert string numbers to actual numbers
+      const processedData = {
+        ...listingData,
+        acreage: parseFloat(listingData.acreage),
+        leaseDuration: parseInt(listingData.leaseDuration),
+        rentPrice: parseFloat(listingData.rentPrice),
+      };
+      
+      const { listing } = await api.createListing(processedData, photos);
+      const normalizedListing = { ...listing, id: listing._id || listing.id };
+      
+      // Refresh listings
+      await loadListings();
+      setCurrentView('dashboard');
+    } catch (error) {
+      console.error('Create listing error:', error);
+      setError(error.message || 'Failed to create listing');
+      throw error;
+    }
   };
 
   const handleSendMessage = async (listingId, content) => {
-    const listing = listings.find(l => l.id === listingId);
-    const newMessage = {
-      id: `msg_${Date.now()}`,
-      listingId,
-      fromId: currentUser.id,
-      toId: listing.ownerId,
-      fromName: currentUser.profile.fullName,
-      content,
-      timestamp: new Date().toISOString(),
-      read: false
-    };
-    
-    await saveMessage(newMessage);
+    setError(null);
+    try {
+      const listing = listings.find(l => (l.id === listingId) || (l._id === listingId));
+      if (!listing) {
+        throw new Error('Listing not found');
+      }
+      
+      const toId = listing.ownerId?._id || listing.ownerId;
+      
+      await api.sendMessage({
+        listingId: listing._id || listing.id,
+        toId,
+        content,
+      });
+      
+      // Refresh messages
+      await loadMessages();
+    } catch (error) {
+      console.error('Send message error:', error);
+      setError(error.message || 'Failed to send message');
+      throw error;
+    }
   };
 
   const handleAdminAction = async (type, targetId, action) => {
-    if (type === 'user') {
-      const user = users.find(u => u.id === targetId);
-      if (user) {
-        user.status = action;
-        await saveUser(user);
+    setError(null);
+    try {
+      if (type === 'user') {
+        await api.updateUserStatus(targetId, action);
+        // Refresh users and listings
+        await loadUsers();
+      } else if (type === 'listing') {
+        await api.updateListingStatus(targetId, action);
+        // Refresh listings
+        await loadListings();
       }
-    } else if (type === 'listing') {
-      const listing = listings.find(l => l.id === targetId);
-      if (listing) {
-        listing.status = action;
-        await saveListing(listing);
-      }
+    } catch (error) {
+      console.error('Admin action error:', error);
+      setError(error.message || 'Failed to perform admin action');
+      throw error;
     }
   };
 
@@ -208,6 +256,18 @@ const FarmKonnectApp = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {error && (
+        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 mx-4 mt-4 rounded">
+          <p className="font-semibold">Error</p>
+          <p>{error}</p>
+          <button 
+            onClick={() => setError(null)} 
+            className="mt-2 text-sm underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       {currentView === 'landing' && <LandingPage onNavigate={setCurrentView} />}
       {currentView === 'register' && <RegisterPage onRegister={handleRegister} onNavigate={setCurrentView} />}
       {currentView === 'login' && <LoginPage onLogin={handleLogin} onNavigate={setCurrentView} />}
@@ -219,7 +279,11 @@ const FarmKonnectApp = () => {
             currentView={currentView} 
             onNavigate={setCurrentView}
             onLogout={handleLogout}
-            messageCount={messages.filter(m => m.toId === currentUser.id && !m.read).length}
+            messageCount={messages.filter(m => {
+              const toId = m.toId?._id || m.toId || m.toId;
+              const userId = currentUser.id || currentUser._id;
+              return toId?.toString() === userId?.toString() && !m.read;
+            }).length}
             showMobile={showMobileMenu}
             onToggleMobile={() => setShowMobileMenu(!showMobileMenu)}
           />
@@ -229,8 +293,17 @@ const FarmKonnectApp = () => {
             {currentView === 'dashboard' && (
               <Dashboard 
                 user={currentUser} 
-                listings={listings.filter(l => l.ownerId === currentUser.id)}
-                messages={messages.filter(m => m.toId === currentUser.id || m.fromId === currentUser.id)}
+                listings={listings.filter(l => {
+                  const ownerId = l.ownerId?._id || l.ownerId || l.ownerId;
+                  const userId = currentUser.id || currentUser._id;
+                  return ownerId?.toString() === userId?.toString();
+                })}
+                messages={messages.filter(m => {
+                  const toId = m.toId?._id || m.toId || m.toId;
+                  const fromId = m.fromId?._id || m.fromId || m.fromId;
+                  const userId = currentUser.id || currentUser._id;
+                  return toId?.toString() === userId?.toString() || fromId?.toString() === userId?.toString();
+                })}
                 onNavigate={setCurrentView}
               />
             )}
@@ -264,7 +337,12 @@ const FarmKonnectApp = () => {
             
             {currentView === 'messages' && (
               <MessagesPage 
-                messages={messages.filter(m => m.toId === currentUser.id || m.fromId === currentUser.id)}
+                messages={messages.filter(m => {
+                  const toId = m.toId?._id || m.toId || m.toId;
+                  const fromId = m.fromId?._id || m.fromId || m.fromId;
+                  const userId = currentUser.id || currentUser._id;
+                  return toId?.toString() === userId?.toString() || fromId?.toString() === userId?.toString();
+                })}
                 currentUser={currentUser}
                 listings={listings}
                 users={users}
@@ -273,7 +351,11 @@ const FarmKonnectApp = () => {
             
             {currentView === 'my-listings' && currentUser.type === 'landowner' && (
               <MyListingsPage 
-                listings={listings.filter(l => l.ownerId === currentUser.id)}
+                listings={listings.filter(l => {
+                  const ownerId = l.ownerId?._id || l.ownerId || l.ownerId;
+                  const userId = currentUser.id || currentUser._id;
+                  return ownerId?.toString() === userId?.toString();
+                })}
                 onNavigate={setCurrentView}
               />
             )}
