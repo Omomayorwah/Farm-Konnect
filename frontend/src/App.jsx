@@ -25,16 +25,15 @@ const FarmKonnectApp = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const loadListings = useCallback(async (user = currentUser) => {
+  // Load listings - accepts user as parameter to avoid dependency on currentUser state
+  const loadListings = useCallback(async (user) => {
     try {
       let listingsData;
       if (user?.type === 'admin') {
         const response = await api.getAllListingsAdmin();
-        // API returns { listings: array } or just array
         listingsData = response.listings || response;
       } else {
         const response = await api.getAllListings();
-        // API returns { listings: array } or just array
         listingsData = response.listings || response;
       }
       setListings(Array.isArray(listingsData) ? listingsData.map(l => ({ ...l, id: l._id || l.id })) : []);
@@ -42,12 +41,11 @@ const FarmKonnectApp = () => {
       console.error('Error loading listings:', error);
       setError('Failed to load listings');
     }
-  }, [currentUser]);
+  }, []);
 
   const loadMessages = useCallback(async () => {
     try {
       const response = await api.getAllMessages();
-      // API returns { messages: array } or just array
       const messagesData = response.messages || response;
       setMessages(Array.isArray(messagesData) ? messagesData.map(m => ({ ...m, id: m._id || m.id })) : []);
     } catch (error) {
@@ -59,7 +57,6 @@ const FarmKonnectApp = () => {
   const loadUsers = useCallback(async () => {
     try {
       const response = await api.getUsers();
-      // API returns { users: array } or just array
       const usersData = response.users || response;
       setUsers(Array.isArray(usersData) ? usersData.map(u => ({ ...u, id: u._id || u.id })) : []);
     } catch (error) {
@@ -76,7 +73,6 @@ const FarmKonnectApp = () => {
       const token = api.getToken();
       if (token) {
         const response = await api.getCurrentUser();
-        // API returns { user: object } or just the user object
         const user = response.user || response;
         
         if (user) {
@@ -85,11 +81,11 @@ const FarmKonnectApp = () => {
           setCurrentUser(normalizedUser);
           setCurrentView(normalizedUser.type === 'admin' ? 'admin-dashboard' : 'dashboard');
           
-          // Load user-specific data
+          // Load user-specific data - pass user directly to avoid state dependency
           await Promise.all([
             loadListings(normalizedUser),
             loadMessages(),
-            normalizedUser.type === 'admin' && loadUsers(),
+            normalizedUser.type === 'admin' ? loadUsers() : Promise.resolve(),
           ]);
         }
       }
@@ -101,10 +97,11 @@ const FarmKonnectApp = () => {
     setIsLoading(false);
   }, [loadListings, loadMessages, loadUsers]);
 
-  // Load data from API on mount
+  // Load data from API on mount - only run once
   useEffect(() => {
     loadInitialData();
-  }, [loadInitialData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleRegister = async (formData) => {
     setError(null);
@@ -115,13 +112,12 @@ const FarmKonnectApp = () => {
         type: formData.type,
       });
       
-      // API returns { user: object, token: string } or similar
       const user = response.user || response;
       const normalizedUser = { ...user, id: user.id || user._id };
       setCurrentUser(normalizedUser);
       setCurrentView('dashboard');
       
-      // Load initial data after registration
+      // Load initial data after registration - pass user directly
       await loadListings(normalizedUser);
       await loadMessages();
     } catch (error) {
@@ -136,17 +132,16 @@ const FarmKonnectApp = () => {
     try {
       const response = await api.login({ email, password });
       
-      // API returns { user: object, token: string } or similar
       const user = response.user || response;
       const normalizedUser = { ...user, id: user.id || user._id };
       setCurrentUser(normalizedUser);
       setCurrentView(normalizedUser.type === 'admin' ? 'admin-dashboard' : 'dashboard');
       
-      // Load user-specific data after login
+      // Load user-specific data after login - pass user directly
       await Promise.all([
-        loadListings(),
+        loadListings(normalizedUser),
         loadMessages(),
-        normalizedUser.type === 'admin' && loadUsers(),
+        normalizedUser.type === 'admin' ? loadUsers() : Promise.resolve(),
       ]);
       
       return true;
@@ -170,7 +165,6 @@ const FarmKonnectApp = () => {
     setError(null);
     try {
       const response = await api.updateProfile(profileData);
-      // API returns { user: object } or just the user object
       const user = response.user || response;
       const normalizedUser = { ...user, id: user.id || user._id };
       setCurrentUser(normalizedUser);
@@ -194,8 +188,8 @@ const FarmKonnectApp = () => {
       
       await api.createListing(processedData, photos);
       
-      // Refresh listings
-      await loadListings();
+      // Refresh listings - pass currentUser directly
+      await loadListings(currentUser);
       setCurrentView('dashboard');
     } catch (error) {
       console.error('Create listing error:', error);
@@ -234,12 +228,12 @@ const FarmKonnectApp = () => {
     try {
       if (type === 'user') {
         await api.updateUserStatus(targetId, action);
-        // Refresh users and listings
+        // Refresh users
         await loadUsers();
       } else if (type === 'listing') {
         await api.updateListingStatus(targetId, action);
-        // Refresh listings
-        await loadListings();
+        // Refresh listings - pass currentUser directly
+        await loadListings(currentUser);
       }
     } catch (error) {
       console.error('Admin action error:', error);
