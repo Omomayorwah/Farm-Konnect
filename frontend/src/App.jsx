@@ -223,6 +223,21 @@ const FarmKonnectApp = () => {
     }
   };
 
+  const handleListingUpdate = (updatedListing) => {
+    // Update the selected listing
+    const normalizedListing = { ...updatedListing, id: updatedListing._id || updatedListing.id };
+    setSelectedListing(normalizedListing);
+    
+    // Update the listings array
+    setListings(prevListings => 
+      prevListings.map(l => {
+        const listingId = l._id || l.id;
+        const updatedId = updatedListing._id || updatedListing.id;
+        return listingId?.toString() === updatedId?.toString() ? normalizedListing : l;
+      })
+    );
+  };
+
   const handleAdminAction = async (type, targetId, action) => {
     setError(null);
     try {
@@ -331,6 +346,7 @@ const FarmKonnectApp = () => {
                 currentUser={currentUser}
                 onSendMessage={handleSendMessage}
                 onBack={() => setCurrentView('search-land')}
+                onListingUpdate={handleListingUpdate}
               />
             )}
             
