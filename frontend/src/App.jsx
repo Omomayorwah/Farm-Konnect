@@ -186,6 +186,7 @@ const FarmKonnectApp = () => {
         rentPrice: parseFloat(listingData.rentPrice),
       };
       
+      // Pass photos array to createListing
       await api.createListing(processedData, photos);
       
       // Refresh listings - pass currentUser directly
@@ -221,21 +222,6 @@ const FarmKonnectApp = () => {
       setError(error.message || 'Failed to send message');
       throw error;
     }
-  };
-
-  const handleListingUpdate = (updatedListing) => {
-    // Update the selected listing
-    const normalizedListing = { ...updatedListing, id: updatedListing._id || updatedListing.id };
-    setSelectedListing(normalizedListing);
-    
-    // Update the listings array
-    setListings(prevListings => 
-      prevListings.map(l => {
-        const listingId = l._id || l.id;
-        const updatedId = updatedListing._id || updatedListing.id;
-        return listingId?.toString() === updatedId?.toString() ? normalizedListing : l;
-      })
-    );
   };
 
   const handleAdminAction = async (type, targetId, action) => {
@@ -346,7 +332,6 @@ const FarmKonnectApp = () => {
                 currentUser={currentUser}
                 onSendMessage={handleSendMessage}
                 onBack={() => setCurrentView('search-land')}
-                onListingUpdate={handleListingUpdate}
               />
             )}
             

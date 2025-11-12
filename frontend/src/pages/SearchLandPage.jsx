@@ -66,7 +66,7 @@ const SearchLandPage = ({ listings, onSelectListing }) => {
               <p className="text-gray-600 text-sm mb-2">{listing.city}, {listing.state}</p>
               <div className="flex justify-between items-center mb-2">
                 <span className="text-gray-700 font-semibold">{listing.acreage} acres</span>
-                <span className="text-green-600 font-bold">${listing.rentPrice}/mo</span>
+                <span className="text-green-600 font-bold">₦{listing.rentPrice}/mo</span>
               </div>
               <div className="flex flex-wrap gap-1">
                 {listing.features.slice(0, 3).map(feature => (

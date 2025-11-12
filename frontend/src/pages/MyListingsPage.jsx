@@ -36,7 +36,7 @@ const MyListingsPage = ({ listings, onNavigate }) => {
               </div>
               <div>
                 <p className="text-gray-600 text-sm">Price</p>
-                <p className="font-bold text-green-600">${listing.rentPrice}/mo</p>
+                <p className="font-bold text-green-600">₦{listing.rentPrice}/mo</p>
               </div>
             </div>
           </div>
