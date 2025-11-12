@@ -11,7 +11,7 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin:'https://farm-konnect-nu.vercel.app',
+  origin:'https://farm-konnect-delta.vercel.app',
   credentials: true,
 }));
 app.use(express.json());
