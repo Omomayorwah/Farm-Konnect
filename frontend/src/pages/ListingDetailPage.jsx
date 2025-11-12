@@ -269,7 +269,7 @@ const ListingDetailPage = ({ listing, currentUser, onSendMessage, onBack, onList
                     ) : (
                       <img 
                         src={getImageUrl(photo)} 
-                        alt={`Listing image ${index + 1}`}
+                        alt={`Listing ${index + 1}`}
                         className="w-full h-full object-cover"
                         onError={() => handleImageError(`manage-${index}`)}
                       />
