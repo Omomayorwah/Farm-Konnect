@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import * as api from './services/apiService';
 import Sidebar from './components/Sidebar';
 import MobileHeader from './components/MobileHeader';
@@ -25,30 +25,60 @@ const FarmKonnectApp = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Load data from API on mount
-  useEffect(() => {
-    loadInitialData();
+  const loadListings = useCallback(async (user = currentUser) => {
+    try {
+      let listingsData;
+      if (user?.type === 'admin') {
+        const response = await api.getAllListingsAdmin();
+        // API returns { listings: array } or just array
+        listingsData = response.listings || response;
+      } else {
+        const response = await api.getAllListings();
+        // API returns { listings: array } or just array
+        listingsData = response.listings || response;
+      }
+      setListings(Array.isArray(listingsData) ? listingsData.map(l => ({ ...l, id: l._id || l.id })) : []);
+    } catch (error) {
+      console.error('Error loading listings:', error);
+      setError('Failed to load listings');
+    }
+  }, [currentUser]);
+
+  const loadMessages = useCallback(async () => {
+    try {
+      const response = await api.getAllMessages();
+      // API returns { messages: array } or just array
+      const messagesData = response.messages || response;
+      setMessages(Array.isArray(messagesData) ? messagesData.map(m => ({ ...m, id: m._id || m.id })) : []);
+    } catch (error) {
+      console.error('Error loading messages:', error);
+      setError('Failed to load messages');
+    }
   }, []);
 
-  // Reload data when view changes or after mutations
-  const reloadData = async () => {
-    if (currentUser) {
-      await Promise.all([
-        loadListings(),
-        loadMessages(),
-        currentUser.type === 'admin' && loadUsers(),
-      ]);
+  const loadUsers = useCallback(async () => {
+    try {
+      const response = await api.getUsers();
+      // API returns { users: array } or just array
+      const usersData = response.users || response;
+      setUsers(Array.isArray(usersData) ? usersData.map(u => ({ ...u, id: u._id || u.id })) : []);
+    } catch (error) {
+      console.error('Error loading users:', error);
+      setError('Failed to load users');
     }
-  };
+  }, []);
 
-  const loadInitialData = async () => {
+  const loadInitialData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
       // Check if user is already logged in (has token)
       const token = api.getToken();
       if (token) {
-        const { user } = await api.getCurrentUser();
+        const response = await api.getCurrentUser();
+        // API returns { user: object } or just the user object
+        const user = response.user || response;
+        
         if (user) {
           // Normalize user ID
           const normalizedUser = { ...user, id: user.id || user._id };
@@ -69,52 +99,24 @@ const FarmKonnectApp = () => {
       api.logout();
     }
     setIsLoading(false);
-  };
+  }, [loadListings, loadMessages, loadUsers]);
 
-  const loadListings = async (user = currentUser) => {
-    try {
-      if (user?.type === 'admin') {
-        const { listings: allListings } = await api.getAllListingsAdmin();
-        setListings(allListings.map(l => ({ ...l, id: l._id || l.id })));
-      } else {
-        const { listings: approvedListings } = await api.getAllListings();
-        setListings(approvedListings.map(l => ({ ...l, id: l._id || l.id })));
-      }
-    } catch (error) {
-      console.error('Error loading listings:', error);
-      setError('Failed to load listings');
-    }
-  };
-
-  const loadMessages = async () => {
-    try {
-      const { messages: userMessages } = await api.getAllMessages();
-      setMessages(userMessages.map(m => ({ ...m, id: m._id || m.id })));
-    } catch (error) {
-      console.error('Error loading messages:', error);
-      setError('Failed to load messages');
-    }
-  };
-
-  const loadUsers = async () => {
-    try {
-      const { users: allUsers } = await api.getUsers();
-      setUsers(allUsers.map(u => ({ ...u, id: u._id || u.id })));
-    } catch (error) {
-      console.error('Error loading users:', error);
-      setError('Failed to load users');
-    }
-  };
+  // Load data from API on mount
+  useEffect(() => {
+    loadInitialData();
+  }, [loadInitialData]);
 
   const handleRegister = async (formData) => {
     setError(null);
     try {
-      const { user, token } = await api.register({
+      const response = await api.register({
         email: formData.email,
         password: formData.password,
         type: formData.type,
       });
       
+      // API returns { user: object, token: string } or similar
+      const user = response.user || response;
       const normalizedUser = { ...user, id: user.id || user._id };
       setCurrentUser(normalizedUser);
       setCurrentView('dashboard');
@@ -132,8 +134,10 @@ const FarmKonnectApp = () => {
   const handleLogin = async (email, password) => {
     setError(null);
     try {
-      const { user, token } = await api.login({ email, password });
+      const response = await api.login({ email, password });
       
+      // API returns { user: object, token: string } or similar
+      const user = response.user || response;
       const normalizedUser = { ...user, id: user.id || user._id };
       setCurrentUser(normalizedUser);
       setCurrentView(normalizedUser.type === 'admin' ? 'admin-dashboard' : 'dashboard');
@@ -165,7 +169,9 @@ const FarmKonnectApp = () => {
   const handleUpdateProfile = async (profileData) => {
     setError(null);
     try {
-      const { user } = await api.updateProfile(profileData);
+      const response = await api.updateProfile(profileData);
+      // API returns { user: object } or just the user object
+      const user = response.user || response;
       const normalizedUser = { ...user, id: user.id || user._id };
       setCurrentUser(normalizedUser);
     } catch (error) {
@@ -186,8 +192,7 @@ const FarmKonnectApp = () => {
         rentPrice: parseFloat(listingData.rentPrice),
       };
       
-      const { listing } = await api.createListing(processedData, photos);
-      const normalizedListing = { ...listing, id: listing._id || listing.id };
+      await api.createListing(processedData, photos);
       
       // Refresh listings
       await loadListings();
@@ -376,4 +381,3 @@ const FarmKonnectApp = () => {
 };
 
 export default FarmKonnectApp;
-
