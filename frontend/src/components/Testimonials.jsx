@@ -3,28 +3,28 @@ import React from 'react';
 const testimonials = [
   {
     quote: "Farm Konnect helped me find the perfect plot for my organic farming venture. The process was seamless and the landowner was a pleasure to work with.",
-    author: "John Doe",
+    author: "Samuel Olawale",
     title: "Organic Farmer",
-    avatar: "https://randomuser.me/api/portraits/men/32.jpg",
+    avatar: "https://randomuser.me/api/portraits/men/30.jpg",
   },
   {
     quote: "I had acres of unused land. Thanks to Farm Konnect, I now have a steady income from a reliable farmer. It's a win-win!",
-    author: "Jane Smith",
+    author: "Joy Ebere",
     title: "Landowner",
-    avatar: "https://randomuser.me/api/portraits/women/44.jpg",
+    avatar: "https://randomuser.me/api/portraits/women/40.jpg",
   },
   {
     quote: "The platform is incredibly user-friendly. I listed my property and had inquiries within a week. Highly recommended!",
-    author: "Samuel Green",
+    author: "Abdullia Musa",
     title: "Landowner",
     avatar: "https://randomuser.me/api/portraits/men/56.jpg",
   },
 ];
 
 const Testimonials = () => (
-  <section className="py-20 bg-green-50">
+  <section className="py-20 bg-gray-100">
     <div className="max-w-6xl mx-auto px-4">
-      <h2 className="text-4xl font-bold text-center text-gray-800 mb-12">What Our Users Say</h2>
+      <h2 className="text-4xl font-bold text-center text-gray-700 mb-12">What Our Users Say</h2>
       <div className="grid md:grid-cols-1 lg:grid-cols-3 gap-8">
         {testimonials.map((testimonial, index) => (
           <div key={index} className="bg-white p-8 rounded-lg shadow-md">

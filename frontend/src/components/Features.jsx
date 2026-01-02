@@ -25,10 +25,10 @@ const features = [
 ];
 
 const Features = () => (
-  <section className="py-20 bg-gray-50">
+  <section id='features' className="py-20 bg-gray-100">
     <div className="max-w-6xl mx-auto px-4">
-      <h2 className="text-4xl font-bold text-center text-gray-800 mb-12">Why Choose Farm Konnect?</h2>
-      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+      <h2 className="text-4xl font-bold text-center text-gray-700 mb-12">Why Choose Farm Konnect?</h2>
+      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-10">
         {features.map((feature, index) => (
           <div key={index} className="bg-white p-8 rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300">
             <div className="mb-4">{feature.icon}</div>
